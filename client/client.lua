@@ -17,9 +17,10 @@ T = Translation.Langs[Lang]
 CachedSkin = {}
 CachedComponents = {}
 
---Register prompts char select
+
+
 local function RegisterPrompts()
-	local str = Config.keys.prompt_create.name
+	local str = T.PromptLabels.promptcreateNew
 	createPrompt = PromptRegisterBegin()
 	PromptSetControlAction(createPrompt, Config.keys.prompt_create.key)
 	str = CreateVarString(10, 'LITERAL_STRING', str)
@@ -30,8 +31,7 @@ local function RegisterPrompts()
 	PromptSetGroup(createPrompt, PromptGroup)
 	PromptRegisterEnd(createPrompt)
 
-
-	local dstr = Config.keys.prompt_delete.name
+	local dstr = T.PromptLabels.promptdeleteCurrent
 	deletePrompt = PromptRegisterBegin()
 	PromptSetControlAction(deletePrompt, Config.keys.prompt_delete.key)
 	dstr = CreateVarString(10, 'LITERAL_STRING', dstr)
@@ -42,8 +42,7 @@ local function RegisterPrompts()
 	PromptSetGroup(deletePrompt, PromptGroup)
 	PromptRegisterEnd(deletePrompt)
 
-
-	local dstr = Config.keys.prompt_swap.name
+	local dstr = T.PromptLabels.promptswapChar
 	swapPrompt = PromptRegisterBegin()
 	PromptSetControlAction(swapPrompt, Config.keys.prompt_swap.key)
 	dstr = CreateVarString(10, 'LITERAL_STRING', dstr)
@@ -54,7 +53,7 @@ local function RegisterPrompts()
 	PromptSetGroup(swapPrompt, PromptGroup)
 	PromptRegisterEnd(swapPrompt)
 
-	local dstr = Config.keys.prompt_select.name
+	local dstr = T.PromptLabels.promptselectChar
 	selectPrompt = PromptRegisterBegin()
 	PromptSetControlAction(selectPrompt, Config.keys.prompt_select.key)
 	dstr = CreateVarString(10, 'LITERAL_STRING', dstr)
@@ -72,7 +71,6 @@ AddEventHandler('onClientResourceStart', function(resourceName)
 		return
 	end
 	RegisterPrompts()
-
 	if Config.DevMode then
 		print("^3VORP Character Selector is in ^1DevMode^7 dont use in live servers")
 		TriggerServerEvent("vorp_GoToSelectionMenu", GetPlayerServerId(PlayerId()))
@@ -111,7 +109,6 @@ AddEventHandler("vorpcharacter:selectCharacter", function(myCharacters, mc)
 	local permSnow = Config.charselgroundSnow
 	local hour = Config.timeHour
 	local freeze = Config.timeFreeze
-	
 	if #myCharacters < 1 then
 		return TriggerEvent("vorpcharacter:startCharacterCreator") -- if no chars then send back to creator
 	end
@@ -119,10 +116,10 @@ AddEventHandler("vorpcharacter:selectCharacter", function(myCharacters, mc)
 	MaxCharacters = mc
 	DoScreenFadeOut(1000)
 	Wait(1000)
-	
+
 	if customWeather then
 		exports.weathersync:setMyWeather(weather, 10, permSnow) -- Disable weather and time sync and set a weather for this client.
-		exports.weathersync:setMyTime(hour, 0, 0, 10, freeze) 
+		exports.weathersync:setMyTime(hour, 0, 0, 10, freeze)
 	end
 
 	isInCharacterSelector = true
@@ -131,6 +128,9 @@ AddEventHandler("vorpcharacter:selectCharacter", function(myCharacters, mc)
 	SetEntityVisible(PlayerPedId(), false)
 	SetEntityInvincible(PlayerPedId(), true)
 	SetEntityCoords(PlayerPedId(), param.coords, false, false, false, false)
+	while not HasCollisionLoadedAroundEntity(PlayerPedId()) do
+		Wait(1000)
+	end
 	mainCamera = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", param.cameraParams.x, param.cameraParams.y,
 		param.cameraParams.z, param.cameraParams.rotX, param.cameraParams.rotY, param.cameraParams.rotZ,
 		param.cameraParams.fov, false, 0)
@@ -206,7 +206,8 @@ function Controller()
 				local fullname = (firstname .. " " .. lastname) or ""
 
 				local label = CreateVarString(10, 'LITERAL_STRING',
-					T.promptselect .. fullname .. T.promptselect2 .. myChars[selectedChar].money)
+					T.PromptLabels.promptselect ..
+					fullname .. T.PromptLabels.promptselect2 .. myChars[selectedChar].money)
 				PromptSetActiveGroupThisFrame(PromptGroup, label)
 
 				-- this needs to be prompts
@@ -276,11 +277,13 @@ local function EnablePrompt(boolean)
 	PromptSetEnabled(createPrompt, boolean)
 	PromptSetEnabled(deletePrompt, Config.AllowPlayerDeleteCharacter)
 	PromptSetEnabled(swapPrompt, boolean)
+	PromptSetEnabled(logoutPrompt, boolean)
 	PromptSetEnabled(selectPrompt, boolean)
 	PromptSetVisible(createPrompt, boolean)
 	PromptSetVisible(deletePrompt, boolean)
 	PromptSetVisible(swapPrompt, boolean)
 	PromptSetVisible(selectPrompt, boolean)
+	PromptSetVisible(logoutPrompt, boolean)
 end
 
 
@@ -319,6 +322,8 @@ function CharSelect()
 	SetPlayerModel(PlayerId(), joaat(nModel), false)
 	Citizen.InvokeNative(0x77FF8D35EEC6BBC4, PlayerPedId(), 0, 0)
 	Wait(1000)
+	LoadPlayerComponents(PlayerPedId(), CachedSkin, CachedComponents)
+	Wait(1000)
 	LoadPlayerComponents(PlayerPedId(), CachedSkin, CachedComponents) -- idky why but only loads if ran twice
 	NetworkClearClockTimeOverride()
 	FreezeEntityPosition(PlayerPedId(), false)
@@ -335,12 +340,14 @@ function CharSelect()
 	DoScreenFadeIn(1000)
 end
 
+RegisterNetEvent("vorpcharacter:reloadafterdeath")
 AddEventHandler("vorpcharacter:reloadafterdeath", function()
-	--LoadPlayer(joaat("CS_dutch"))
-	--Citizen.InvokeNative(0xED40380076A31506, PlayerId(), joaat("CS_dutch"), false)
-	--UpdateVariation(PlayerPedId())
-	Wait(1000)
+	LoadPlayer(joaat("CS_dutch"))
+	Citizen.InvokeNative(0xED40380076A31506, PlayerId(), joaat("CS_dutch"), false)
+	IsPedReadyToRender()
+	Wait(500)
 	ExecuteCommand("rc")
+	SetModelAsNoLongerNeeded(joaat("CS_dutch"))
 end)
 
 
@@ -375,9 +382,17 @@ local function LoadComps(ped, components)
 end
 
 function LoadPlayerComponents(ped, skin, components)
-	TriggerServerEvent("vorpcharacter:reloadedskinlistener")
 	local normal
 	local gender
+
+	if joaat(skin.sex) ~= GetEntityModel(ped) then
+		LoadPlayer(joaat(skin.sex))
+		Citizen.InvokeNative(0xED40380076A31506, PlayerId(), joaat(skin.sex), false)
+		IsPedReadyToRender()
+		Citizen.InvokeNative(0xA91E6CF94404E8C9, ped)
+		ped = PlayerPedId()
+		SetModelAsNoLongerNeeded(joaat(skin.sex))
+	end
 
 	if skin.sex ~= "mp_male" then
 		Citizen.InvokeNative(0x77FF8D35EEC6BBC4, ped, 7, true)
@@ -389,10 +404,13 @@ function LoadPlayerComponents(ped, skin, components)
 		gender = "Male"
 	end
 
+
+
 	Citizen.InvokeNative(0x0BFA1BD465CDFEFD, ped) -- ResetPedComponents
 	IsPedReadyToRender()
 	Wait(100)
 	RemoveMetaTags(PlayerPedId())
+	Wait(200)
 	local count = 0
 	local uCount = 1
 	for _, v in pairs(Config.DefaultChar[gender]) do
@@ -417,6 +435,9 @@ function LoadPlayerComponents(ped, skin, components)
 	if skin.LegsType == 0 then
 		skin.LegsType = tonumber("0x" .. Config.DefaultChar[gender][uCount].Legs[1])
 	end
+	if skin.Torso == 0 or nil then
+		skin.Torso = tonumber("0x" .. Config.DefaultChar[gender][uCount].Body[1])
+	end
 
 	--Preload
 	Citizen.InvokeNative(0xC5E7204F322E49EB, skin.albedo, normal, 0x7FC5B1E1)
@@ -427,6 +448,8 @@ function LoadPlayerComponents(ped, skin, components)
 	Citizen.InvokeNative(0xD3A7B003ED343FD9, PlayerPedId(), skin.Eyes, false, true, true)
 	Citizen.InvokeNative(0x1902C4CFCC5BE57C, PlayerPedId(), skin.Waist)
 	Citizen.InvokeNative(0x1902C4CFCC5BE57C, PlayerPedId(), skin.Body)
+	Citizen.InvokeNative(0x1902C4CFCC5BE57C, PlayerPedId(), skin.Torso)
+	Citizen.InvokeNative(0xD3A7B003ED343FD9, PlayerPedId(), skin.Legs, true, true, true)
 	Citizen.InvokeNative(0xD3A7B003ED343FD9, PlayerPedId(), skin.Hair, false, true, true)
 	Citizen.InvokeNative(0xD3A7B003ED343FD9, PlayerPedId(), skin.Beard, false, true, true)
 
@@ -471,6 +494,7 @@ function LoadPlayerComponents(ped, skin, components)
 		skin.grime_opacity)
 
 	Wait(200)
+	TriggerServerEvent("vorpcharacter:reloadedskinlistener") -- this event can be listened to whenever u need to listen for rc
 	Citizen.InvokeNative(0xD710A5007C2AC539, ped, 0x3F1F01E5, 0)
 	Citizen.InvokeNative(0xCC8CA3E88256E58F, PlayerPedId(), true, true, true, false)
 end
@@ -495,19 +519,10 @@ function faceOverlay(name, visibility, tx_id, tx_normal, tx_material, tx_color_t
 				v.tx_material = tx_material
 				v.tx_color_type = tx_color_type
 				v.tx_opacity = tx_opacity
-				if tx_opacity == 0 then
-					v.tx_opacity = 1.0
-				end
 				v.tx_unk = tx_unk
 				if tx_color_type == 0 then
-					if palette_id == 0 then
-						palette_id = 1
-					end
 					v.palette = Config.color_palettes[name][palette_id]
 					v.palette_color_primary = palette_color_primary
-					if palette_color_primary == 0 then
-						v.palette_color_primary = 1
-					end
 					v.palette_color_secondary = palette_color_secondary
 					v.palette_color_tertiary = palette_color_tertiary
 				end
@@ -522,8 +537,12 @@ function faceOverlay(name, visibility, tx_id, tx_normal, tx_material, tx_color_t
 						v.tx_id = Config.overlays_info[name][tx_id].id
 					end
 				end
-
 				v.opacity = opacity
+				if opacity == 0 then
+					-- if its visible but opacity is 0 then set visible to 0
+					v.visibility = 0
+					v.opacity = 0
+				end
 			end
 		end
 	end
@@ -618,6 +637,9 @@ function LoadCharacterSelect(ped, skin, components)
 	if skin.LegsType == 0 then
 		skin.LegsType = tonumber("0x" .. Config.DefaultChar[gender][uCount].Legs[1])
 	end
+	if skin.Torso == 0 or nil then
+		skin.Torso = tonumber("0x" .. Config.DefaultChar[gender][uCount].Body[1])
+	end
 
 	--Preload
 	Citizen.InvokeNative(0xC5E7204F322E49EB, skin.albedo, normal, 0x7FC5B1E1)
@@ -630,6 +652,8 @@ function LoadCharacterSelect(ped, skin, components)
 	Citizen.InvokeNative(0xD3A7B003ED343FD9, pedHandler, skin.Beard, true, true, false)
 	Citizen.InvokeNative(0x1902C4CFCC5BE57C, pedHandler, skin.Waist)
 	Citizen.InvokeNative(0x1902C4CFCC5BE57C, pedHandler, skin.Body)
+	Citizen.InvokeNative(0x1902C4CFCC5BE57C, pedHandler, skin.Torso)
+	Citizen.InvokeNative(0xD3A7B003ED343FD9, pedHandler, skin.Legs, true, true, true)
 	SetPedScale(pedHandler, skin.Scale)
 	LoadFaceFeatures(pedHandler, skin)
 	LoadComps(pedHandler, components)
