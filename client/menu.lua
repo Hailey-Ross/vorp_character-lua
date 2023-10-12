@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 MenuData = {}
 
 TriggerEvent("menuapi:getData", function(call)
@@ -60,9 +61,12 @@ local function __CloseAll()
     InCharacterCreator = false
     RemoveImaps()
     ClearTimecycleModifier()
-    TriggerEvent("vorp:initNewCharacter")
+    if not IsInSecondChance then
+        TriggerEvent("vorp:initNewCharacter")
+    end
     SetEntityInvincible(__player, false)
     SetEntityVisible(__player, true)
+    NetworkEndTutorialSession()
 end
 
 local function __GetName(Result)
@@ -105,23 +109,40 @@ function OpenCharCreationMenu(clothingtable)
             value = "appearance",
             desc = imgPath:format(img) .. "<br> " .. T.MenuCreation.element.desc
         },
-        {
+    }
+
+    if not IsInSecondChance then
+        elements[#elements + 1] = {
             label = T.MenuCreation.element2.label,
             value = "clothing",
             desc = imgPath:format(img1) .. "<br> " .. T.MenuCreation.element2.desc,
-        },
-        {
+
+        }
+        elements[#elements + 1] = {
             label = __CHARNAME or T.MenuCreation.element3.label,
             value = __VALUE1 or "name",
             desc = __DESC or imgPath:format(img4) .. "<br> " .. T.MenuCreation.element3.desc,
-        },
-        {
+        }
+        elements[#elements + 1] = {
             label = __LABEL or ("<span style='color: Grey;'>" .. T.MenuCreation.element4.label .. "</span>"),
             value = __VALUE or "not",
             desc = imgPath:format(img3) .. "<br> " .. T.MenuCreation.element4.desc,
-        },
+        }
+    else
+        -- enable clothing
+        elements[#elements + 1] = {
+            label = T.MenuCreation.element2.label,
+            value = "clothing",
+            desc = imgPath:format(img1) .. "<br> " .. T.MenuCreation.element2.desc,
 
-    }
+        }
+        -- enable save button
+        elements[#elements + 1] = {
+            label = T.MenuCreation.element4.label,
+            value = "secondchance",
+            desc = imgPath:format(img3) .. "<br> " .. T.MenuCreation.element4.desc,
+        }
+    end
 
     MenuData.Open('default', GetCurrentResourceName(), 'menuapi',
         {
@@ -134,7 +155,6 @@ function OpenCharCreationMenu(clothingtable)
 
         function(data, menu)
             if (data.current == "backup") then
-                --!dont  allow go back
             end
 
             if (data.current.value == "clothing") then -- check if it has been built
@@ -143,6 +163,15 @@ function OpenCharCreationMenu(clothingtable)
 
             if (data.current.value == "appearance") then -- check if it has been built
                 OpenAppearanceMenu(clothingtable)
+            end
+
+            if data.current.value == "secondchance" then
+                menu.close()
+                --* name character
+                TriggerServerEvent("vorp_character:Client:SecondChanceSave", PlayerSkin, PlayerClothing)
+                CachedComponents = PlayerClothing
+                CachedSkin = PlayerSkin
+                __CloseAll()
             end
 
             if (data.current.value == "name") then -- check if it has been built
@@ -205,7 +234,6 @@ function OpenCharCreationMenu(clothingtable)
             end
 
             if (data.current.value == "save") then
-                Wait(1000)
                 menu.close()
                 --* name character
                 TriggerServerEvent("vorpcharacter:saveCharacter", PlayerSkin, PlayerClothing, FirstName, LastName)
@@ -578,7 +606,7 @@ function OpenBodyMenu(table)
             comp = Config.BodyType.Waist,
             min = -1,
             max = #Config.BodyType.Waist, -- get color index and update when component changes
-            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element2.desc .. 
+            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element2.desc ..
                 #Config.BodyType.Waist .. ' ' .. T.MenuBody.element2.desc2
             -- load image same name as category
         },
@@ -591,7 +619,7 @@ function OpenBodyMenu(table)
             comp = Config.DefaultChar[gender],
             min = 0,
             max = #Config.DefaultChar[gender][__SKINCOLOR].Body, -- get color index and update when component changes
-            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element3.desc .. 
+            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element3.desc ..
                 #Config.DefaultChar[gender][__SKINCOLOR].Body,
             tag = "Body",
             option = "type"
@@ -605,7 +633,7 @@ function OpenBodyMenu(table)
             comp = Config.DefaultChar[gender],
             min = 0,
             max = #Config.DefaultChar[gender][__SKINCOLOR].Legs, -- get color index and update when component changes
-            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element4.desc .. 
+            desc = imgPath:format("character_creator_build") .. "<br>" .. T.MenuBody.element4.desc ..
                 #Config.DefaultChar[gender][__SKINCOLOR].Legs,
             tag = "Legs",
             option = "type"
@@ -628,10 +656,15 @@ function OpenBodyMenu(table)
 
             if data.current.option == "type" then
                 if data.current.value > 0 then
-                    local index                  = data.current.value
-                    local Comp                   = Config.DefaultChar[gender][__SKINCOLOR]
-                    local compType               = tonumber("0x" .. Comp[data.current.tag][index])
-                    PlayerSkin[data.current.tag] = compType
+                    local index    = data.current.value
+                    local Comp     = Config.DefaultChar[gender][__SKINCOLOR]
+                    local compType = tonumber("0x" .. Comp[data.current.tag][index])
+
+                    if data.current.tag == "Body" then
+                        PlayerSkin["Torso"] = compType
+                    else
+                        PlayerSkin[data.current.tag] = compType
+                    end
                     ApplyComponentToPed(__player, compType)
                 end
             end
@@ -671,7 +704,7 @@ function OpenHerritageMenu(table)
         info = Config.DefaultChar[gender],
         min = 0,
         max = #Config.DefaultChar[gender],
-        desc = T.MenuHeritage.element.desc .. #Config.DefaultChar[gender] ..' '.. T.MenuHeritage.element.desc2,
+        desc = T.MenuHeritage.element.desc .. #Config.DefaultChar[gender] .. ' ' .. T.MenuHeritage.element.desc2,
         tag = "heritage"
     }
 
@@ -821,6 +854,11 @@ function OpenHairMenu(table)
         value = "eyebrows",
         desc = imgPath:format("character_creator_eyebrows") .. "<br>" .. T.MenuHair.element5.desc
     }
+    elements[#elements + 1] = {
+        label = T.MenuHair.element6.label,
+        value = "hair",
+        desc = imgPath:format("character_creator_hair") .. "<br>" .. T.MenuHair.element6.desc
+    }
 
     MenuData.Open('default', GetCurrentResourceName(), 'menuapi',
         {
@@ -860,6 +898,12 @@ function OpenHairMenu(table)
                 local label = data.current.label
                 OpenBeardEyebrowMenu(table, "eyebrows_opacity", "eyebrows_tx_id", "eyebrows", 1,
                     label, "eyebrows_color")
+            end
+
+            if (data.current.value == "hair") then
+                local label = data.current.label
+                OpenBeardEyebrowMenu(table, "hair_opacity", "hair_tx_id", "hair", 4,
+                    label, "hair_color_primary")
             end
 
             if (data.current.value == "beardstabble") then
@@ -1062,6 +1106,9 @@ function OpenBeardEyebrowMenu(table, opacity, txt_id, category, index, label, co
                 if category == "eyebrows" then
                     PlayerSkin.eyebrows_visibility = 1
                 end
+                if category == "hair" then
+                    PlayerSkin.hair_visibility = 1
+                end
                 PlayerSkin[data.current.txt_id] = data.current.value
                 toggleOverlayChange(data.current.category, 1, PlayerSkin[data.current.txt_id], 1, 0, 0,
                     1.0, 0, 1, PlayerSkin[data.current.color], 0, 0, 1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
@@ -1088,6 +1135,9 @@ function OpenBeardEyebrowMenu(table, opacity, txt_id, category, index, label, co
                     end
                     if category == "eyebrows" then
                         PlayerSkin.eyebrows_visibility = 0
+                    end
+                    if category == "hair" then
+                        PlayerSkin.hair_visibility = 0
                     end
                 end
                 --* opacity
@@ -1229,8 +1279,8 @@ function OpenFaceMenu(table)
 
             if data.current.tag == "eyes" then
                 __StartAnimation("mood_normal_eyes_wide")
-                PlayerSkin.Eyes = Config.Eyes[gender][data.current.value]
 
+                PlayerSkin.Eyes = Config.Eyes[gender][data.current.value]
                 Citizen.InvokeNative(0xD3A7B003ED343FD9, __player, PlayerSkin.Eyes, true, true, true)
                 UpdateVariation(__player)
             end
@@ -1415,14 +1465,14 @@ function OpenLifeStyleMenu(table)
             --* Texture
             if data.current.tag == "texture" then
                 if data.current.value > 0 then
-                    PlayerSkin[data.current.visibility] = 1
+                    --PlayerSkin[data.current.visibility] = 1
                     PlayerSkin[data.current.txt_id] = data.current.value
                     toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                         PlayerSkin[data.current.txt_id], 0, 0, 1,
                         1.0, 0, 0, 0, 0, 0,
                         1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
                 else
-                    PlayerSkin[data.current.visibility] = 1
+                    -- PlayerSkin[data.current.visibility] = 0
                     PlayerSkin[data.current.txt_id] = 0
                     toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                         PlayerSkin[data.current.txt_id], 0, 0, 1,
@@ -1459,6 +1509,8 @@ local overlayLookup = {
         color = "lipsticks_palette_color_primary",
         color2 = "lipsticks_palette_color_secondary",
         color3 = "lipsticks_palette_color_tertiary",
+        variant = "lipsticks_palette_id",
+        varvalue = 7,
         opacity = "lipsticks_opacity",
         visibility = "lipsticks_visibility"
     },
@@ -1472,6 +1524,8 @@ local overlayLookup = {
     eyeliners = {
         label = T.MenuMakeup.element3.label,
         txt_id = "eyeliner_tx_id",
+        variant = "eyeliner_palette_id",
+        varvalue = 15,
         color = "eyeliner_color_primary",
         opacity = "eyeliner_opacity",
         visibility = "eyeliner_visibility"
@@ -1482,6 +1536,8 @@ local overlayLookup = {
         color = "shadows_palette_color_primary",
         color2 = "shadows_palette_color_secondary",
         color3 = "shadows_palette_color_tertiary",
+        variant = "shadows_palette_id",
+        varvalue = 5,
         opacity = "shadows_opacity",
         visibility = "shadows_visibility"
     },
@@ -1495,7 +1551,7 @@ function OpenMakeupMenu(table)
         if overlayLookup[key] then
             -- *texture
             elements[#elements + 1] = {
-                label = overlayLookup[key].label .. T.MenuMakeup.element5.label,
+                label = overlayLookup[key].label .. ' ' .. T.MenuMakeup.element5.label,
                 value = PlayerSkin[overlayLookup[key].txt_id],
                 min = 0,
                 max = #value,
@@ -1503,15 +1559,23 @@ function OpenMakeupMenu(table)
                 txt_id = overlayLookup[key].txt_id,
                 opac = overlayLookup[key].opacity,
                 color = overlayLookup[key].color,
+                variant = overlayLookup[key].variant,
                 visibility = overlayLookup[key].visibility,
                 desc = T.MenuMakeup.element5.desc,
                 name = key,
                 tag = "texture"
             }
             --*Color
+            local ColorValue = 0
+            for x, color in pairs(Config.color_palettes[key]) do
+                if joaat(color) == PlayerSkin[overlayLookup[key].color] then
+                    ColorValue = x
+                end
+            end
+
             elements[#elements + 1] = {
-                label = overlayLookup[key].label .. T.MenuMakeup.element6.label,
-                value = PlayerSkin[overlayLookup[key].opacity],
+                label = overlayLookup[key].label .. ' ' .. T.MenuMakeup.element6.label,
+                value = ColorValue,
                 min = 0,
                 max = 10,
                 comp = Config.color_palettes[key],
@@ -1520,16 +1584,25 @@ function OpenMakeupMenu(table)
                 opac = overlayLookup[key].opacity,
                 color = overlayLookup[key].color,
                 visibility = overlayLookup[key].visibility,
+                variant = overlayLookup[key].variant,
                 desc = T.MenuMakeup.element6.desc,
                 name = key,
                 tag = "color"
             }
 
-            if key == "lipsticks" or key == "eyeliners" then
+            -- if key == "lipsticks" or key == "eyeliners" then
+            if key == "lipsticks" then
+                local Color2Value = 0
+                for x, color in pairs(Config.color_palettes[key]) do
+                    if joaat(color) == PlayerSkin[overlayLookup[key].color2] then
+                        Color2Value = x
+                    end
+                end
+
                 --*Color 2
                 elements[#elements + 1] = {
-                    label = overlayLookup[key].label .. T.MenuMakeup.element7.label,
-                    value = PlayerSkin[overlayLookup[key].opacity],
+                    label = overlayLookup[key].label .. ' ' .. T.MenuMakeup.element7.label,
+                    value = Color2Value,
                     min = 0,
                     max = 10,
                     type = "slider",
@@ -1539,6 +1612,7 @@ function OpenMakeupMenu(table)
                     color = overlayLookup[key].color,
                     color2 = overlayLookup[key].color2,
                     color3 = overlayLookup[key].color3,
+                    variant = overlayLookup[key].variant,
                     visibility = overlayLookup[key].visibility,
                     desc = T.MenuMakeup.element7.desc,
                     name = key,
@@ -1546,9 +1620,31 @@ function OpenMakeupMenu(table)
                 }
             end
 
+            if key == "lipsticks" or key == "shadows" or key == "eyeliners" then
+                --*Variant
+                elements[#elements + 1] = {
+                    label = overlayLookup[key].label .. ' ' .. T.MenuMakeup.element8.label,
+                    value = PlayerSkin[overlayLookup[key].variant] or 0,
+                    min = 0,
+                    max = overlayLookup[key].varvalue,
+                    type = "slider",
+                    comp = Config.color_palettes[key],
+                    txt_id = overlayLookup[key].txt_id,
+                    opac = overlayLookup[key].opacity,
+                    color = overlayLookup[key].color,
+                    color2 = overlayLookup[key].color2,
+                    color3 = overlayLookup[key].color3,
+                    variant = overlayLookup[key].variant,
+                    visibility = overlayLookup[key].visibility,
+                    desc = T.MenuMakeup.element8.desc,
+                    name = key,
+                    tag = "variant"
+                }
+            end
+
             --* opacity
             elements[#elements + 1] = {
-                label = overlayLookup[key].label .. T.MenuMakeup.element8.label,
+                label = overlayLookup[key].label .. ' ' .. T.MenuMakeup.element9.label,
                 value = PlayerSkin[overlayLookup[key].opacity],
                 min = 0,
                 max = 0.9,
@@ -1557,8 +1653,9 @@ function OpenMakeupMenu(table)
                 txt_id = overlayLookup[key].txt_id,
                 opac = overlayLookup[key].opacity,
                 color = overlayLookup[key].color,
+                variant = overlayLookup[key].variant,
                 visibility = overlayLookup[key].visibility,
-                desc = T.MenuMakeup.element8.desc,
+                desc = T.MenuMakeup.element9.desc,
                 name = key,
                 tag = "opacity"
             }
@@ -1582,7 +1679,7 @@ function OpenMakeupMenu(table)
 
             if data.current.tag == "texture" then
                 --* texture id
-                if data.current.value < 0 then
+                if data.current.value <= 0 then
                     PlayerSkin[data.current.visibility] = 0
                 else
                     PlayerSkin[data.current.visibility] = 1
@@ -1590,8 +1687,9 @@ function OpenMakeupMenu(table)
                 PlayerSkin[data.current.txt_id] = data.current.value
                 toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                     PlayerSkin[data.current.txt_id], 1, 0, 0,
-                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2],
-                    PlayerSkin[data.current.color3] or 0, 1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
+                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2] or 0,
+                    PlayerSkin[data.current.color3] or 0, PlayerSkin[data.current.variant] or 1,
+                    PlayerSkin[data.current.opac], PlayerSkin.albedo)
             end
 
             if data.current.tag == "color" then
@@ -1599,8 +1697,9 @@ function OpenMakeupMenu(table)
                 PlayerSkin[data.current.color] = data.current.comp[data.current.value]
                 toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                     PlayerSkin[data.current.txt_id], 1, 0, 0,
-                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2],
-                    PlayerSkin[data.current.color3] or 0, 1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
+                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2] or 0,
+                    PlayerSkin[data.current.color3] or 0, PlayerSkin[data.current.variant] or 1,
+                    PlayerSkin[data.current.opac], PlayerSkin.albedo)
             end
 
             if data.current.tag == "color2" then
@@ -1608,13 +1707,24 @@ function OpenMakeupMenu(table)
                 PlayerSkin[data.current.color2] = data.current.comp[data.current.value]
                 toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                     PlayerSkin[data.current.txt_id], 1, 0, 0,
-                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2],
-                    PlayerSkin[data.current.color3], 1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
+                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2] or 0,
+                    PlayerSkin[data.current.color3] or 0, PlayerSkin[data.current.variant] or 1, PlayerSkin
+                    [data.current.opac], PlayerSkin.albedo)
+            end
+
+            if data.current.tag == "variant" then
+                --* variant
+                PlayerSkin[data.current.variant] = data.current.value
+                toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
+                    PlayerSkin[data.current.txt_id], 1, 0, 0,
+                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2] or 0,
+                    PlayerSkin[data.current.color3] or 0, PlayerSkin[data.current.variant] or 1,
+                    PlayerSkin[data.current.opac], PlayerSkin.albedo)
             end
 
             if data.current.tag == "opacity" then
                 --* opacity
-                if data.current.value < 0 then
+                if data.current.value <= 0 then
                     PlayerSkin[data.current.visibility] = 0
                 else
                     PlayerSkin[data.current.visibility] = 1
@@ -1623,8 +1733,9 @@ function OpenMakeupMenu(table)
                 PlayerSkin[data.current.opac] = data.current.value
                 toggleOverlayChange(data.current.name, PlayerSkin[data.current.visibility],
                     PlayerSkin[data.current.txt_id], 1, 0, 0,
-                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2],
-                    PlayerSkin[data.current.color3] or 0, 1, PlayerSkin[data.current.opac], PlayerSkin.albedo)
+                    1.0, 0, 1, PlayerSkin[data.current.color], PlayerSkin[data.current.color2] or 0,
+                    PlayerSkin[data.current.color3] or 0, PlayerSkin[data.current.variant] or 1,
+                    PlayerSkin[data.current.opac], PlayerSkin.albedo)
             end
         end, function(data, menu)
 

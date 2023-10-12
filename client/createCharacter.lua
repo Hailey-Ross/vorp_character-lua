@@ -24,6 +24,7 @@ InCharacterCreator = false
 IsInCharCreation = false
 FemalePed = nil
 MalePed = nil
+IsInSecondChance = false
 
 
 TriggerEvent("getCore", function(core)
@@ -70,18 +71,18 @@ end)
 
 
 
-local defaultX, defaultY, defaultZ = -560.83, -3776.33, 239.58
-local defaultPitch, defaultRoll, defaultHeading, defaultZoom = -13.56231, 0.00, -91.93626, 45.00
+local defaultX, defaultY, defaultZ = -561.22, -3776.26, 239.16
+local defaultPitch, defaultRoll, defaultHeading, defaultZoom = -12.0, 0.00, -88.74, 45.00
 
 local function createCams()
 	camera = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", defaultX, defaultY, defaultZ, defaultPitch, defaultRoll,
 		defaultHeading, defaultZoom, false, 0)
-	cameraMale = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", defaultX + 1.1639, defaultY + 0.69, defaultZ - 0.1534,
-		-9.622695, 0.0, -86.08074, defaultZoom, false, 0)
-	cameraFemale = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", defaultX + 0.9855, defaultY - 0.776, defaultZ - 0.1365,
-		-13.41718, 0.0, -88.04576, defaultZoom, false, 0)
-	cameraEditor = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", defaultX, defaultY - 4.593, defaultZ - 0.1363,
-		-11.32719, 0.0, -90.96693, defaultZoom, false, 0)
+	cameraMale = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", -560.21, -3775.38, 239.16,
+		-10.0, 0.0, -93.2, defaultZoom, false, 0)
+	cameraFemale = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", -560.21, -3776.57, 239.16,
+		-10.0, 0.0, -93.2, defaultZoom, false, 0)
+	cameraEditor = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", -560.1333, -3780.923, 239.44,
+		-11.32719, 0.0, -90.96, defaultZoom, false, 0)
 end
 
 -- request char creator imaps
@@ -104,11 +105,11 @@ local function Setup()
 end
 
 RegisterNetEvent("vorpcharacter:startCharacterCreator")
-AddEventHandler("vorpcharacter:startCharacterCreator", function(skin, components)
-	if skin then
-		--psSkin = skin
-		--psComponents = components
-	end
+AddEventHandler("vorpcharacter:startCharacterCreator", function()
+	PrepareMusicEvent("REHR_START")
+	Wait(100)
+	TriggerMusicEvent("REHR_START")
+	Wait(500)
 	InCharacterCreator = true
 	DoScreenFadeOut(500)
 	Wait(1000)
@@ -288,7 +289,7 @@ function StartPrompts()
 	while IsInCharCreation do
 		Wait(0)
 
-		local label = CreateVarString(10, "LITERAL_STRING", "Camera adjustments")
+		local label = CreateVarString(10, "LITERAL_STRING", T.PromptLabels.CamAdjustments)
 		PromptSetActiveGroupThisFrame(PromptGroup2, label)
 
 		if IsControlPressed(2, 0x7065027D) then --right
@@ -354,8 +355,21 @@ function DefaultPedSetup(ped, male)
 end
 
 Clothing = {}
-
-function CreatePlayerModel(model, cam, ps)
+local function EnableCharCreationPrompts()
+	PromptSetEnabled(up, 1)
+	PromptSetVisible(up, 1)
+	PromptSetEnabled(down, 1)
+	PromptSetVisible(down, 1)
+	PromptSetEnabled(left, 1)
+	PromptSetVisible(left, 1)
+	PromptSetEnabled(right, 1)
+	PromptSetVisible(right, 1)
+	PromptSetEnabled(zoomin, 1)
+	PromptSetVisible(zoomin, 1)
+	PromptSetEnabled(zoomout, 1)
+	PromptSetVisible(zoomout, 1)
+end
+function CreatePlayerModel(model, cam)
 	local Gender = "male"
 	local ped = MalePed
 	PlayerSkin.sex = model
@@ -398,22 +412,11 @@ function CreatePlayerModel(model, cam, ps)
 		end
 	end)
 
-	PromptSetEnabled(up, 1)
-	PromptSetVisible(up, 1)
-	PromptSetEnabled(down, 1)
-	PromptSetVisible(down, 1)
-	PromptSetEnabled(left, 1)
-	PromptSetVisible(left, 1)
-	PromptSetEnabled(right, 1)
-	PromptSetVisible(right, 1)
-	PromptSetEnabled(zoomin, 1)
-	PromptSetVisible(zoomin, 1)
-	PromptSetEnabled(zoomout, 1)
-	PromptSetVisible(zoomout, 1)
+	EnableCharCreationPrompts()
 
 	IsInCharCreation = true -- enable light
 
-	for category, value in pairs(Data.cloths[Gender]) do
+	for category, value in pairs(Data.clothing[Gender]) do
 		local categoryTable = {}
 
 		for _, v in pairs(value) do
@@ -439,3 +442,60 @@ function CreatePlayerModel(model, cam, ps)
 	DoScreenFadeIn(3000)
 	OpenCharCreationMenu(Clothing)
 end
+
+RegisterNetEvent('vorp_character:Server:SecondChance', function(skin, comps)
+	DoScreenFadeOut(3000)
+	Wait(3000)
+	IsInSecondChance = true
+	local Gender = "male"
+	if skin.sex == "mp_female" then
+		Gender = "female"
+	end
+	PlayerSkin = skin
+	PlayerClothing = comps
+	local instanced = GetPlayerServerId(PlayerId()) + 456565
+	VORPcore.instancePlayers(math.floor(instanced))
+	RequestImapCreator()
+	RegisterGenderPrompt()
+	CreateThread(StartPrompts)
+	EnableCharCreationPrompts()
+	IsInCharCreation = true
+
+	SetEntityCoords(PlayerPedId(), -558.3258, -3781.111, 237.60, true, true, true, false) -- set player to start creation
+	SetEntityHeading(PlayerPedId(), 93.2)
+	Wait(1000)
+	cameraEditor = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA", -560.1333, -3780.923, 239.44,
+		-11.32719, 0.0, -90.96, defaultZoom, false, 0)
+	Wait(1000)
+	SetCamActive(cameraEditor, true)
+	RenderScriptCams(true, true, 1000, true, true, 0)
+
+	Clothing = {}
+
+	for category, value in pairs(Data.clothing[Gender]) do
+		local categoryTable = {}
+
+		for _, v in pairs(value) do
+			local typeTable = {}
+
+			for _, va in pairs(v) do
+				local hash = va.hashname
+				local hex = va.hash
+
+				table.insert(typeTable, { hash = hash, hex = hex })
+			end
+
+			table.insert(categoryTable, typeTable)
+		end
+		Clothing[category] = categoryTable
+	end
+	DoScreenFadeIn(3000)
+	CreateThread(function()
+		while IsInCharCreation do
+			Wait(0)
+			FreezeEntityPosition(PlayerPedId(), false)
+			DrawLightWithRange(-560.1646, -3782.066, 238.5975, 250, 250, 250, 7.0, 130.0)
+		end
+	end)
+	OpenCharCreationMenu(Clothing)
+end)

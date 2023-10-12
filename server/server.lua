@@ -1,9 +1,13 @@
+---@diagnostic disable: undefined-global
 local VorpCore
 local MaxCharacters
+local VORPInv = exports.vorp_inventory:vorp_inventoryApi()
+local random
 
 TriggerEvent("getCore", function(core)
 	VorpCore = core
 	MaxCharacters = VorpCore.maxCharacters
+	random = math.random(1, #Config.SpawnPosition)
 	VorpCore.addRpcCallback("vorp_characters:getMaxCharacters", function(source, cb, args)
 		cb(#MaxCharacters)
 	end)
@@ -19,10 +23,13 @@ AddEventHandler("vorpcharacter:saveCharacter", function(skin, clothes, firstname
 	local _source = source
 	local playerCoords = Config.SpawnCoords.position
 	local playerHeading = Config.SpawnCoords.heading
-	TriggerEvent("vorp_NewCharacter", _source)
 	VorpCore.getUser(_source).addCharacter(firstname, lastname, json.encode(skin), json.encode(clothes))
 	Wait(600)
 	TriggerClientEvent("vorp:initCharacter", _source, playerCoords, playerHeading, false)
+	-- wait for char to be made
+	SetTimeout(3000, function()
+		TriggerEvent("vorp_NewCharacter", _source)
+	end)
 end)
 
 RegisterServerEvent("vorpcharacter:deleteCharacter")
@@ -47,7 +54,6 @@ AddEventHandler("vorpcharacter:getPlayerSkin", function()
 end)
 
 
---* update Core , Core will update DB
 RegisterNetEvent("vorpcharacter:setPlayerCompChange", function(skinValues, compsValues)
 	local _source = source
 	local UserCharacter = VorpCore.getUser(_source)
@@ -64,48 +70,61 @@ RegisterNetEvent("vorpcharacter:setPlayerCompChange", function(skinValues, comps
 end)
 
 
-function Checkmissingkeys(information, key)
+function Checkmissingkeys(data, key, gender)
 	local switch = false
 	if key == "skin" then
 		for k, v in pairs(PlayerSkin) do
-			if information[k] == nil then
+			if data[k] == nil then
 				switch = true
-				information[k] = v
+				data[k] = v
 			end
-			if information["Eyes"] == 0 then
+			if data["Eyes"] == 0 then
 				switch = true
-				if information["sex"] == "mp_male" then
-					information["Eyes"] = 612262189
+				if data["sex"] == "mp_male" then
+					data["Eyes"] = 612262189
 				else
-					information["Eyes"] = 928002221
+					data["Eyes"] = 928002221
 				end
 			end
 		end
-		return information, switch
+		return data, switch
 	end
 	if key == "comps" then
 		for k, v in pairs(PlayerClothing) do
-			if information[k] == nil then
-				information[k] = v
+			if data[k] == nil then
+				data[k] = v
 			end
 		end
-		return information, switch
+		return data, switch
 	end
 end
 
-AddEventHandler("vorp_SpawnUniqueCharacter", function(source)
+local function UpdateDatabase(character)
+	local json_skin = json.decode(character.skin)
+	local json_comps = json.decode(character.comps)
+	local skin, updateSkin = Checkmissingkeys(json_skin, "skin")
+	local comps, updateComp = Checkmissingkeys(json_comps, "comps", skin.sex)
+
+	if updateSkin then
+		character.updateSkin((json.encode(skin)))
+	end
+	if updateComp then
+		character.updateComps(json.encode(comps))
+	end
+	return skin, comps
+end
+
+local function GetPlayerData(source)
 	local User = VorpCore.getUser(source)
+
+	if not User then
+		return false
+	end
 	local Characters = User.getUserCharacters
+
 	local userCharacters = {}
 	for _, characters in pairs(Characters) do
-		local skin, switch1 = Checkmissingkeys(json.decode(characters.skin), "skin")
-		local comps, switch2 = Checkmissingkeys(json.decode(characters.comps), "comps")
-		if switch1 then
-			characters.updateSkin((json.encode(skin)))
-		end
-		if switch2 then
-			characters.updateComps(json.encode(comps))
-		end
+		local skin, comps = UpdateDatabase(characters)
 		local userChars = {
 			charIdentifier = characters.charIdentifier,
 			money = characters.money,
@@ -119,8 +138,23 @@ AddEventHandler("vorp_SpawnUniqueCharacter", function(source)
 		}
 		userCharacters[#userCharacters + 1] = userChars
 	end
-	TriggerClientEvent("vorpcharacter:spawnUniqueCharacter", source, userCharacters)
+	return userCharacters
+end
+
+AddEventHandler("vorp_SpawnUniqueCharacter", function(source)
+	local _source = source
+	if _source == nil then
+		print("Source is nil")
+		return
+	end
+	local userCharacters = GetPlayerData(_source)
+
+	if not userCharacters then
+		return
+	end
+	TriggerClientEvent("vorpcharacter:spawnUniqueCharacter", _source, userCharacters)
 end)
+
 
 RegisterServerEvent("vorp_GoToSelectionMenu")
 AddEventHandler("vorp_GoToSelectionMenu", function(source)
@@ -129,35 +163,42 @@ AddEventHandler("vorp_GoToSelectionMenu", function(source)
 		print("Source is nil")
 		return
 	end
+	local UserCharacters = GetPlayerData(_source)
 
-	local characters = VorpCore.getUser(_source).getUserCharacters
-	local auxcharacter
-	local UserCharacters = {}
-
-	for _, character in pairs(characters) do
-		local skin, switch1 = Checkmissingkeys(json.decode(character.skin), "skin")
-		local comps, switch2 = Checkmissingkeys(json.decode(character.comps), "comps")
-
-		if switch1 then
-			character.updateSkin((json.encode(skin)))
-		end
-		if switch2 then
-			character.updateComps(json.encode(comps))
-		end
-
-		auxcharacter = {
-			charIdentifier = character.charIdentifier,
-			money = character.money,
-			gold = character.gold,
-			firstname = character.firstname,
-			lastname = character.lastname,
-			skin = skin,
-			components = comps,
-			coords = json.decode(character.coords),
-			isDead = character.isdead
-		}
-		UserCharacters[#UserCharacters + 1] = auxcharacter
+	if not UserCharacters then
+		return
 	end
 
-	TriggerClientEvent("vorpcharacter:selectCharacter", _source, UserCharacters, MaxCharacters)
+	TriggerClientEvent("vorpcharacter:selectCharacter", _source, UserCharacters, MaxCharacters, random)
+end)
+
+CreateThread(function()
+	Wait(1000)
+	VORPInv.RegisterUsableItem(Config.secondChanceItem, function(data)
+		local _source = data.source
+		local User = VorpCore.getUser(_source)
+
+		if not User then
+			return false
+		end
+
+		VORPInv.CloseInv(_source)
+		local Characters = User.getUsedCharacter
+		local CharacterSkin = json.decode(Characters.skin)
+		local CharacterComps = json.decode(Characters.comps)
+		VORPInv.subItem(_source, Config.secondChanceItem, 1)
+		TriggerClientEvent("vorp_character:Server:SecondChance", _source, CharacterSkin, CharacterComps)
+	end)
+end)
+
+
+RegisterNetEvent("vorp_character:Client:SecondChanceSave", function(skin, comps)
+	local _source = source
+	local User = VorpCore.getUser(_source)
+	local character = User.getUsedCharacter
+	character.updateSkin((json.encode(skin)))
+	character.updateComps(json.encode(comps))
+	local playerCoords = Config.SpawnCoords.position
+	local playerHeading = Config.SpawnCoords.heading
+	TriggerClientEvent("vorp:initCharacter", _source, playerCoords, playerHeading, false)
 end)

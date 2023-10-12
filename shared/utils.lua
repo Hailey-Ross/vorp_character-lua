@@ -4,6 +4,7 @@ PlayerSkin = {
     HeadType                          = 0,
     BodyType                          = 0,
     LegsType                          = 0,
+    Torso                             = 0,
     HeadSize                          = 0.0,
     EyeBrowH                          = 0.0,
     EyeBrowW                          = 0.0,
@@ -102,11 +103,16 @@ PlayerSkin = {
     eyeliner_visibility               = 0,
     eyeliner_color_primary            = 0,
     eyeliner_opacity                  = 0,
+    eyeliner_palette_id               = 0,
     blush_visibility                  = 0,
     blush_tx_id                       = 0,
     blush_palette_id                  = 0,
     blush_palette_color_primary       = 0,
     blush_opacity                     = 0,
+    hair_tx_id                        = 0,
+    hair_visibility                   = 0,
+    hair_color_primary                = 0,
+    hair_opacity                      = 0,
 }
 
 
